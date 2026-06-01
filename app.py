@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 import joblib
 import sqlite3
 import os
+from forecast import generate_forecast
 from datetime import datetime
 
 # ── Page config ───────────────────────────────────────────────────
@@ -248,7 +249,8 @@ with st.sidebar:
         ["🏠  Overview",
          "🔍  Data Analysis",
          "🤖  Model Performance",
-         "🔮  Predict AQI"],
+         "🔮  Predict AQI",
+         "📅  3-Day Forecast"],
         label_visibility="collapsed"
     )
     st.markdown("---")
@@ -842,3 +844,157 @@ elif page == "🔮  Predict AQI":
                             'humidity','predicted_aqi','category']
                 if c in hist.columns]
         st.dataframe(hist[cols].head(20), use_container_width=True, hide_index=True)
+
+
+# ══════════════════════════════════════════════════════════════════
+# PAGE 5 — 3-DAY FORECAST
+# ══════════════════════════════════════════════════════════════════
+elif page == "📅  3-Day Forecast":
+
+    st.markdown("""
+    <div class="hero">
+        <h1>📅 3-Day AQI Forecast</h1>
+        <p>Automated AQI predictions for the next 3 days using live Open-Meteo weather data</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Fetch forecast ────────────────────────────────────────────
+    with st.spinner("🌍 Fetching live forecast data from Open-Meteo..."):
+        try:
+            forecast_df = generate_forecast()
+            st.success("✅ Live forecast data loaded successfully")
+        except Exception as e:
+            st.error(f"❌ Could not fetch forecast: {e}")
+            st.stop()
+
+    st.markdown('<hr class="green-divider">', unsafe_allow_html=True)
+
+    # ── Day cards ─────────────────────────────────────────────────
+    st.markdown('<div class="section-title">📊 Daily AQI Forecast</div>',
+                unsafe_allow_html=True)
+
+    cols = st.columns(len(forecast_df))
+    for i, (_, row) in enumerate(forecast_df.iterrows()):
+        cat, color, tc = get_category(row["predicted_aqi"])
+        with cols[i]:
+            st.markdown(f"""
+            <div style="background:{color};border-radius:16px;padding:22px 16px;
+                        text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.15);
+                        margin-bottom:10px">
+                <div style="color:{tc};font-size:0.85rem;font-weight:600;
+                            text-transform:uppercase;letter-spacing:0.08em">
+                    {row['day']}
+                </div>
+                <div style="color:{tc};font-size:0.8rem;margin:2px 0 10px 0">
+                    {row['date']}
+                </div>
+                <div style="color:{tc};font-size:2.8rem;font-weight:700;
+                            line-height:1">
+                    {row['predicted_aqi']:.0f}
+                </div>
+                <div style="color:{tc};font-size:0.8rem;margin-top:8px;
+                            font-weight:600">
+                    {cat}
+                </div>
+                <div style="color:{tc};font-size:0.78rem;margin-top:10px;
+                            opacity:0.9">
+                    🌡️ {row['temperature']}°C
+                    💧 {row['humidity']:.0f}%
+                </div>
+            </div>""", unsafe_allow_html=True)
+
+    st.markdown('<hr class="green-divider">', unsafe_allow_html=True)
+
+    # ── Forecast trend chart ──────────────────────────────────────
+    st.markdown('<div class="section-title">📈 AQI Forecast Trend</div>',
+                unsafe_allow_html=True)
+
+    fig = go.Figure()
+
+    # AQI zone backgrounds
+    for y0, y1, clr, lbl in [
+        (0,   50,  "rgba(34,197,94,0.1)",   "Good"),
+        (50,  100, "rgba(234,179,8,0.1)",   "Moderate"),
+        (100, 150, "rgba(249,115,22,0.1)",  "Unhealthy for Sensitive"),
+        (150, 200, "rgba(239,68,68,0.1)",   "Unhealthy"),
+        (200, 300, "rgba(139,92,246,0.1)",  "Very Unhealthy"),
+    ]:
+        fig.add_hrect(y0=y0, y1=y1, fillcolor=clr, line_width=0,
+                      annotation_text=lbl, annotation_position="left",
+                      annotation=dict(font_size=10))
+
+    fig.add_trace(go.Scatter(
+        x=forecast_df["date"],
+        y=forecast_df["predicted_aqi"],
+        mode="lines+markers+text",
+        text=forecast_df["predicted_aqi"].apply(lambda x: f"{x:.0f}"),
+        textposition="top center",
+        line=dict(color=GREEN, width=3),
+        marker=dict(size=14, color=GREEN,
+                    line=dict(color="#fff", width=2)),
+        name="Predicted AQI"
+    ))
+
+    fig.add_hline(y=100, line_dash="dash", line_color="#eab308",
+                  annotation_text="Moderate threshold")
+    fig.add_hline(y=150, line_dash="dash", line_color="#f97316",
+                  annotation_text="Unhealthy threshold")
+
+    fig.update_layout(
+        height=400, plot_bgcolor=PLOT_BG, paper_bgcolor=PLOT_BG,
+        xaxis=dict(gridcolor=GRID_CLR, title="Date"),
+        yaxis=dict(gridcolor=GRID_CLR, title="Predicted AQI"),
+        hovermode="x unified",
+        margin=dict(l=0, r=0, t=20, b=0),
+        showlegend=False
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown('<hr class="green-divider">', unsafe_allow_html=True)
+
+    # ── Weather conditions table ──────────────────────────────────
+    st.markdown('<div class="section-title">🌤️ Weather Conditions</div>',
+                unsafe_allow_html=True)
+
+    display = forecast_df[["date", "day", "predicted_aqi", "category",
+                            "temperature", "humidity",
+                            "precipitation", "pm2_5", "pm10"]].copy()
+    display.columns = ["Date", "Day", "Predicted AQI", "Category",
+                       "Temp (°C)", "Humidity (%)",
+                       "Precip (mm)", "PM2.5", "PM10"]
+
+    st.dataframe(display, use_container_width=True, hide_index=True)
+
+    st.markdown('<hr class="green-divider">', unsafe_allow_html=True)
+
+    # ── Hazardous alert for forecast ──────────────────────────────
+    max_forecast = forecast_df["predicted_aqi"].max()
+    max_day      = forecast_df.loc[
+        forecast_df["predicted_aqi"].idxmax(), "day"]
+
+    if max_forecast > 200:
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,#7e0023,#b91c1c);
+                    border-radius:14px;padding:20px 24px;
+                    border:2px solid #fca5a5">
+            <b style="color:#fff;font-size:1.1rem">
+                🚨 HIGH AQI FORECASTED ON {max_day.upper()}
+            </b>
+            <p style="color:#fca5a5;margin:6px 0 0 0">
+                AQI expected to reach <b>{max_forecast:.0f}</b> on {max_day}.
+                Plan indoor activities and prepare masks in advance.
+            </p>
+        </div>""", unsafe_allow_html=True)
+    elif max_forecast > 150:
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,#b45309,#d97706);
+                    border-radius:14px;padding:20px 24px;
+                    border:2px solid #fcd34d">
+            <b style="color:#fff;font-size:1.1rem">
+                ⚠️ ELEVATED AQI FORECASTED ON {max_day.upper()}
+            </b>
+            <p style="color:#fef3c7;margin:6px 0 0 0">
+                AQI expected to reach <b>{max_forecast:.0f}</b> on {max_day}.
+                Sensitive groups should plan accordingly.
+            </p>
+        </div>""", unsafe_allow_html=True)
