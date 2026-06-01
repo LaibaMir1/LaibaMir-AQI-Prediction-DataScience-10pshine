@@ -369,5 +369,3 @@ Automatic color-coded banners appear when:
 
 ---
 
-*Report prepared for 10Pearls Data Science Project*
-*Karachi AQI Predictor — End-to-End ML System*
