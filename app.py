@@ -574,7 +574,8 @@ elif page == "🤖  Model Performance":
     st.markdown('<div class="section-title">🔑 Feature Importance</div>', unsafe_allow_html=True)
     features = ['pm2_5','pm10','no2','so2','co','o3',
                 'temperature','humidity','precipitation',
-                'month','day_of_week','is_weekend']
+                'month','day_of_week','is_weekend',
+                'aqi_change_rate','aqi_rolling_3d','aqi_rolling_7d']
     try:
         fi = model.feature_importances_
         fi_df = pd.DataFrame({'Feature': features, 'Importance': fi})
@@ -602,7 +603,7 @@ elif page == "🤖  Model Performance":
         "Max Depth":        "6",
         "Train/Test Split": "80% / 20%",
         "Feature Scaler":   "StandardScaler",
-        "Features Used":    "12",
+        "Features Used":    "15 (inc. AQI change rate + rolling averages)",
         "Random State":     "42",
     }
     cfg_df = pd.DataFrame(config.items(), columns=["Parameter", "Value"])
@@ -627,31 +628,48 @@ elif page == "🔮  Predict AQI":
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("**🟢 Particulates**")
-        pm25  = st.number_input("PM2.5 (μg/m³)",  min_value=0.0, value=45.0, step=0.1)
-        pm10  = st.number_input("PM10 (μg/m³)",   min_value=0.0, value=80.0, step=0.1)
+        pm25  = st.number_input("PM2.5 (μg/m³)",       min_value=0.0, value=45.0,  step=0.1)
+        pm10  = st.number_input("PM10 (μg/m³)",        min_value=0.0, value=80.0,  step=0.1)
     with c2:
         st.markdown("**🔵 Gases**")
-        no2   = st.number_input("NO2 (μg/m³)",    min_value=0.0, value=30.0, step=0.1)
-        so2   = st.number_input("SO2 (μg/m³)",    min_value=0.0, value=15.0, step=0.1)
-        co    = st.number_input("CO (μg/m³)",     min_value=0.0, value=500.0, step=1.0)
-        o3    = st.number_input("O3 (μg/m³)",     min_value=0.0, value=20.0, step=0.1)
+        no2   = st.number_input("NO2 (μg/m³)",         min_value=0.0, value=30.0,  step=0.1)
+        so2   = st.number_input("SO2 (μg/m³)",         min_value=0.0, value=15.0,  step=0.1)
+        co    = st.number_input("CO (μg/m³)",          min_value=0.0, value=500.0, step=1.0)
+        o3    = st.number_input("O3 (μg/m³)",          min_value=0.0, value=20.0,  step=0.1)
     with c3:
         st.markdown("**🌤️ Weather**")
-        temp  = st.number_input("Temperature (°C)",      value=28.0,  step=0.1)
-        humid = st.number_input("Humidity (%)",   min_value=0.0, value=65.0, step=0.1)
-        precip= st.number_input("Precipitation (mm)", min_value=0.0, value=0.0, step=0.1)
+        temp  = st.number_input("Temperature (°C)",     value=28.0,               step=0.1)
+        humid = st.number_input("Humidity (%)",         min_value=0.0, value=65.0, step=0.1)
+        precip= st.number_input("Precipitation (mm)",  min_value=0.0, value=0.0,  step=0.1)
+
+    st.markdown('<div class="section-title">📉 AQI Trend Inputs</div>', unsafe_allow_html=True)
+    st.caption("Based on recent AQI readings — used to compute change rate and rolling averages")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        aqi_today     = st.number_input("Today's AQI",     min_value=0.0, value=120.0, step=0.1)
+    with c2:
+        aqi_yesterday = st.number_input("Yesterday's AQI", min_value=0.0, value=115.0, step=0.1)
+    with c3:
+        aqi_7d_avg    = st.number_input("7-Day Avg AQI",   min_value=0.0, value=118.0, step=0.1)
+
+    # Compute derived features automatically
+    aqi_change_rate = aqi_today - aqi_yesterday
+    aqi_rolling_3d  = (aqi_today + aqi_yesterday + aqi_7d_avg) / 3
+    aqi_rolling_7d  = aqi_7d_avg
 
     now        = datetime.now()
     month      = now.month
     dow        = now.weekday()
     is_weekend = 1 if dow >= 5 else 0
     st.caption(f"🗓️ Auto-detected — Month: **{month}** · Day of week: **{dow}** · Weekend: **{'Yes' if is_weekend else 'No'}**")
+    st.caption(f"📊 Computed — AQI Change Rate: **{aqi_change_rate:.1f}** · 3-Day Avg: **{aqi_rolling_3d:.1f}** · 7-Day Avg: **{aqi_rolling_7d:.1f}**")
 
     st.markdown('<hr class="green-divider">', unsafe_allow_html=True)
 
     if st.button("🔍 Predict AQI Now", use_container_width=True, type="primary"):
         feat   = np.array([[pm25, pm10, no2, so2, co, o3,
-                            temp, humid, precip, month, dow, is_weekend]])
+                            temp, humid, precip, month, dow, is_weekend,
+                            aqi_change_rate, aqi_rolling_3d, aqi_rolling_7d]])
         scaled = scaler.transform(feat)
         aqi    = float(model.predict(scaled)[0])
         cat, color, tc = get_category(aqi)
