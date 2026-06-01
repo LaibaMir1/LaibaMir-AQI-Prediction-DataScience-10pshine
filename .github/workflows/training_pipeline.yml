@@ -1,0 +1,38 @@
+name: Training Pipeline — Retrain Models Daily
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # every day at 2:00 AM UTC
+  workflow_dispatch:        # allow manual trigger from GitHub UI
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install pandas numpy scikit-learn xgboost joblib hopsworks==4.7.*
+
+      - name: Run training pipeline
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+        run: python train_pipeline.py
+
+      - name: Commit updated models
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name  "GitHub Actions"
+          git add models/ || true
+          git diff --staged --quiet || git commit -m "auto: retrain models [$(date +'%Y-%m-%d')]"
+          git push || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

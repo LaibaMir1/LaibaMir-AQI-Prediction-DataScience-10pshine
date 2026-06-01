@@ -1,0 +1,36 @@
+name: Feature Pipeline — Fetch & Store Data
+
+on:
+  schedule:
+    - cron: "0 * * * *"   # every hour
+  workflow_dispatch:        # allow manual trigger from GitHub UI
+
+jobs:
+  fetch-and-store:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install requests pandas numpy
+
+      - name: Fetch latest Karachi AQI + weather data
+        run: python fetch_karachi_data.py
+
+      - name: Commit updated dataset
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name  "GitHub Actions"
+          git add karachi_daily_aqi_weather.csv || true
+          git diff --staged --quiet || git commit -m "auto: update dataset [$(date +'%Y-%m-%d %H:%M')]"
+          git push || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
