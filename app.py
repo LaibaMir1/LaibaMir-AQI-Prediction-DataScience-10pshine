@@ -8,6 +8,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import joblib
 import sqlite3
+import os
 from datetime import datetime
 
 # ── Page config ───────────────────────────────────────────────────
@@ -590,6 +591,28 @@ elif page == "🤖  Model Performance":
         st.plotly_chart(fig, use_container_width=True)
     except Exception as e:
         st.warning(f"Could not load feature importance: {e}")
+
+    st.markdown('<hr class="green-divider">', unsafe_allow_html=True)
+
+    # ── SHAP Explainability ───────────────────────────────────────
+    st.markdown('<div class="section-title">🔬 SHAP Explainability</div>', unsafe_allow_html=True)
+    st.caption("SHAP (SHapley Additive exPlanations) shows how each feature contributes to predictions")
+
+    shap_bar  = "models/shap_summary_bar.png"
+    shap_bee  = "models/shap_beeswarm.png"
+
+    if os.path.exists(shap_bar) and os.path.exists(shap_bee):
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**📊 Mean Feature Importance**")
+            st.image(shap_bar, use_column_width=True)
+            st.caption("Higher SHAP value = stronger influence on AQI prediction")
+        with c2:
+            st.markdown("**🐝 Feature Impact Distribution**")
+            st.image(shap_bee, use_column_width=True)
+            st.caption("Red = high feature value, Blue = low feature value")
+    else:
+        st.info("⏳ SHAP plots not found. Run Step 22 in Colab and download shap_summary_bar.png and shap_beeswarm.png into the models/ folder.")
 
     st.markdown('<hr class="green-divider">', unsafe_allow_html=True)
 
