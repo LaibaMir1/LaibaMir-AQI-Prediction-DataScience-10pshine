@@ -204,11 +204,13 @@ def save_prediction(inputs, aqi, category):
             timestamp TEXT,
             pm2_5 REAL, pm10 REAL, no2 REAL, so2 REAL,
             co REAL, o3 REAL, temperature REAL, humidity REAL,
+            precipitation REAL, aqi_change_rate REAL,
+            aqi_rolling_3d REAL, aqi_rolling_7d REAL,
             predicted_aqi REAL, category TEXT
         )
     """)
     conn.execute(
-        "INSERT INTO predictions VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO predictions VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (datetime.utcnow().isoformat(), *inputs, aqi, category)
     )
     conn.commit()
@@ -274,6 +276,51 @@ if page == "🏠  Overview":
     max_aqi    = df['aqi'].max()
     min_aqi    = df['aqi'].min()
     cat, color, tc = get_category(latest_aqi)
+
+    # ── Hazardous Alert Banner ────────────────────────────────────
+    if latest_aqi > 300:
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,#7e0023,#b91c1c);
+                    border-radius:14px;padding:20px 24px;margin-bottom:20px;
+                    box-shadow:0 4px 20px rgba(126,0,35,0.4);
+                    border:2px solid #fca5a5;animation:pulse 1s infinite">
+            <div style="color:#fff;font-size:1.4rem;font-weight:700">
+                🚨 HAZARDOUS AIR QUALITY ALERT
+            </div>
+            <div style="color:#fca5a5;font-size:1rem;margin-top:6px">
+                Current AQI is <b>{latest_aqi:.0f}</b> — Extremely dangerous!
+                Everyone must stay indoors. Avoid all outdoor activity.
+                Wear N95 masks if going outside is unavoidable.
+            </div>
+        </div>""", unsafe_allow_html=True)
+    elif latest_aqi > 200:
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,#6d28d9,#7c3aed);
+                    border-radius:14px;padding:20px 24px;margin-bottom:20px;
+                    box-shadow:0 4px 20px rgba(109,40,217,0.35);
+                    border:2px solid #c4b5fd">
+            <div style="color:#fff;font-size:1.3rem;font-weight:700">
+                ⚠️ VERY UNHEALTHY AIR QUALITY WARNING
+            </div>
+            <div style="color:#ede9fe;font-size:1rem;margin-top:6px">
+                Current AQI is <b>{latest_aqi:.0f}</b> — Health alert for everyone.
+                Sensitive groups should stay indoors. Limit all outdoor activity.
+            </div>
+        </div>""", unsafe_allow_html=True)
+    elif latest_aqi > 150:
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg,#b45309,#d97706);
+                    border-radius:14px;padding:20px 24px;margin-bottom:20px;
+                    box-shadow:0 4px 20px rgba(180,83,9,0.3);
+                    border:2px solid #fcd34d">
+            <div style="color:#fff;font-size:1.2rem;font-weight:700">
+                🟠 UNHEALTHY AIR QUALITY NOTICE
+            </div>
+            <div style="color:#fef3c7;font-size:1rem;margin-top:6px">
+                Current AQI is <b>{latest_aqi:.0f}</b> — Everyone may experience health effects.
+                Sensitive groups (elderly, children, asthma) should stay indoors.
+            </div>
+        </div>""", unsafe_allow_html=True)
 
     # ── KPI cards ─────────────────────────────────────────────────
     c1, c2, c3, c4 = st.columns(4)
@@ -726,8 +773,34 @@ elif page == "🔮  Predict AQI":
                 advice = "🚨 Hazardous! Stay indoors. Avoid all outdoor activity."
             st.markdown(f'<div class="advice-box">{advice}</div>', unsafe_allow_html=True)
 
+        # ── Hazardous alert on predict page ──────────────────────
+        if aqi > 300:
+            st.markdown("""
+            <div style="background:linear-gradient(135deg,#7e0023,#b91c1c);
+                        border-radius:12px;padding:18px 22px;margin-top:16px;
+                        border:2px solid #fca5a5">
+                <b style="color:#fff;font-size:1.1rem">🚨 HAZARDOUS LEVEL PREDICTED</b>
+                <p style="color:#fca5a5;margin:6px 0 0 0">
+                Stay indoors immediately. Close all windows.
+                Use air purifiers. Wear N95 mask if going out is unavoidable.
+                Contact local health authorities if symptoms develop.
+                </p>
+            </div>""", unsafe_allow_html=True)
+        elif aqi > 200:
+            st.markdown("""
+            <div style="background:linear-gradient(135deg,#6d28d9,#7c3aed);
+                        border-radius:12px;padding:18px 22px;margin-top:16px;
+                        border:2px solid #c4b5fd">
+                <b style="color:#fff;font-size:1.1rem">⚠️ VERY UNHEALTHY LEVEL PREDICTED</b>
+                <p style="color:#ede9fe;margin:6px 0 0 0">
+                Avoid all outdoor activity. Keep windows closed.
+                Sensitive groups must stay indoors.
+                </p>
+            </div>""", unsafe_allow_html=True)
+
         save_prediction(
-            [pm25, pm10, no2, so2, co, o3, temp, humid, precip],
+            [pm25, pm10, no2, so2, co, o3, temp, humid, precip,
+             aqi_change_rate, aqi_rolling_3d, aqi_rolling_7d],
             round(aqi, 1), cat
         )
         st.success("✅ Prediction saved to history")
