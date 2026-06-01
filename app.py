@@ -36,16 +36,35 @@ html, body, [class*="css"] {
 [data-testid="stSidebar"] * {
     color: #ecfdf5 !important;
 }
-[data-testid="stSidebar"] .stRadio label {
-    background: rgba(255,255,255,0.08);
-    border-radius: 8px;
-    padding: 8px 14px;
-    margin-bottom: 4px;
-    display: block;
-    transition: background 0.2s;
+
+/* ── Nav buttons ── */
+.nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 11px 16px;
+    border-radius: 10px;
+    border: none;
+    background: rgba(255,255,255,0.07);
+    color: #ecfdf5 !important;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    margin-bottom: 6px;
+    text-align: left;
+    transition: all 0.2s;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: 0.01em;
 }
-[data-testid="stSidebar"] .stRadio label:hover {
+.nav-btn:hover {
     background: rgba(255,255,255,0.18);
+    transform: translateX(3px);
+}
+.nav-btn.active {
+    background: rgba(255,255,255,0.22);
+    border-left: 3px solid #6ee7b7;
+    font-weight: 700;
 }
 
 /* ── Main background ── */
@@ -179,19 +198,13 @@ def get_hopsworks_project():
             api_key_value=st.secrets["HOPSWORKS_API_KEY"]
         )
         return project
-    except Exception as e:
-        st.warning(f"⚠️ Hopsworks unavailable — using local files. ({e})")
+    except Exception:
         return None
 
 # ── Load model ────────────────────────────────────────────────────
 @st.cache_resource
 def load_model():
-    """
-    Try to load model from Hopsworks Model Registry.
-    Falls back to local pkl if Hopsworks is unavailable.
-    """
     project = get_hopsworks_project()
-
     if project:
         try:
             mr         = project.get_model_registry()
@@ -199,26 +212,17 @@ def load_model():
             model_dir  = model_meta.download()
             model  = joblib.load(os.path.join(model_dir, "xgboost_karachi.pkl"))
             scaler = joblib.load(os.path.join(model_dir, "scaler_karachi.pkl"))
-            st.sidebar.success("✅ Model loaded from Hopsworks")
             return model, scaler
-        except Exception as e:
-            st.sidebar.warning(f"⚠️ Registry load failed — using local. ({e})")
-
-    # Fallback to local
+        except Exception:
+            pass
     model  = joblib.load("models/xgboost_karachi.pkl")
     scaler = joblib.load("models/scaler_karachi.pkl")
-    st.sidebar.info("📁 Model loaded from local files")
     return model, scaler
 
 # ── Load dataset ──────────────────────────────────────────────────
 @st.cache_data(ttl=3600)
 def load_dataset():
-    """
-    Try to load features from Hopsworks Feature Store.
-    Falls back to local CSV if Hopsworks is unavailable.
-    """
     project = get_hopsworks_project()
-
     if project:
         try:
             fs            = project.get_feature_store()
@@ -226,16 +230,12 @@ def load_dataset():
             df            = feature_group.select_all().read()
             df["date"]    = pd.to_datetime(df["date"])
             df            = df.sort_values("date").reset_index(drop=True)
-            st.sidebar.success("✅ Data loaded from Hopsworks Feature Store")
             return df
-        except Exception as e:
-            st.sidebar.warning(f"⚠️ Feature Store load failed — using local CSV. ({e})")
-
-    # Fallback to local CSV
+        except Exception:
+            pass
     df = pd.read_csv("karachi_daily_aqi_weather.csv")
     df["date"] = pd.to_datetime(df["date"])
     df.columns = [c.lower().replace(".", "_") for c in df.columns]
-    st.sidebar.info("📁 Data loaded from local CSV")
     return df
 
 model, scaler = load_model()
@@ -290,6 +290,17 @@ BLUE      = "#0891b2"
 TEAL      = "#0d9488"
 
 # ── Sidebar ───────────────────────────────────────────────────────
+if "page" not in st.session_state:
+    st.session_state.page = "Overview"
+
+pages = {
+    "Overview":          "🏠  Overview",
+    "Data Analysis":     "🔍  Data Analysis",
+    "Model Performance": "🤖  Model Performance",
+    "Predict AQI":       "🔮  Predict AQI",
+    "3-Day Forecast":    "📅  3-Day Forecast",
+}
+
 with st.sidebar:
     st.markdown("""
     <div class="sidebar-logo">
@@ -299,26 +310,38 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
+    st.markdown("<div style='margin-bottom:8px;font-size:0.7rem;color:#6ee7b7;letter-spacing:0.12em;text-transform:uppercase;font-weight:600'>Navigation</div>", unsafe_allow_html=True)
+
+    for key, label in pages.items():
+        is_active = st.session_state.page == key
+        btn_class = "nav-btn active" if is_active else "nav-btn"
+        if st.button(label, key=f"nav_{key}", use_container_width=True):
+            st.session_state.page = key
+            st.rerun()
+        # Apply active style via JS-free CSS trick
+        if is_active:
+            st.markdown(f"""
+            <style>
+            div[data-testid="stButton"] button[kind="secondary"]:last-of-type {{
+                background: rgba(255,255,255,0.22) !important;
+                border-left: 3px solid #6ee7b7 !important;
+                font-weight: 700 !important;
+            }}
+            </style>""", unsafe_allow_html=True)
+
     st.markdown("---")
-    page = st.radio(
-        "Navigation",
-        ["🏠  Overview",
-         "🔍  Data Analysis",
-         "🤖  Model Performance",
-         "🔮  Predict AQI",
-         "📅  3-Day Forecast"],
-        label_visibility="collapsed"
-    )
-    st.markdown("---")
-    st.markdown("<span style='font-size:0.8rem;color:#a7f3d0'>📍 Location: Karachi, PK</span>", unsafe_allow_html=True)
-    st.markdown("<span style='font-size:0.8rem;color:#a7f3d0'>🤖 Model: XGBoost</span>", unsafe_allow_html=True)
-    st.markdown("<span style='font-size:0.8rem;color:#a7f3d0'>📅 Updated: Daily</span>", unsafe_allow_html=True)
+    st.markdown("<span style='font-size:0.78rem;color:#a7f3d0'>📍 Karachi, Pakistan</span>", unsafe_allow_html=True)
+    st.markdown("<span style='font-size:0.78rem;color:#a7f3d0'>🤖 ML Model: Ridge Regression</span>", unsafe_allow_html=True)
+    st.markdown("<span style='font-size:0.78rem;color:#a7f3d0'>📅 Data: Updated Daily</span>", unsafe_allow_html=True)
+    st.markdown("<span style='font-size:0.78rem;color:#a7f3d0'>🌐 Source: Open-Meteo API</span>", unsafe_allow_html=True)
+
+page = st.session_state.page
 
 
 # ══════════════════════════════════════════════════════════════════
 # PAGE 1 — OVERVIEW
 # ══════════════════════════════════════════════════════════════════
-if page == "🏠  Overview":
+if page == "Overview":
 
     st.markdown("""
     <div class="hero">
@@ -488,7 +511,7 @@ if page == "🏠  Overview":
 # ══════════════════════════════════════════════════════════════════
 # PAGE 2 — DATA ANALYSIS
 # ══════════════════════════════════════════════════════════════════
-elif page == "🔍  Data Analysis":
+elif page == "Data Analysis":
 
     st.markdown("""
     <div class="hero">
@@ -577,7 +600,7 @@ elif page == "🔍  Data Analysis":
 # ══════════════════════════════════════════════════════════════════
 # PAGE 3 — MODEL PERFORMANCE
 # ══════════════════════════════════════════════════════════════════
-elif page == "🤖  Model Performance":
+elif page == "Model Performance":
 
     st.markdown("""
     <div class="hero">
@@ -724,14 +747,13 @@ elif page == "🤖  Model Performance":
     # ── Model config table ────────────────────────────────────────
     st.markdown('<div class="section-title">⚙️ Model Configuration</div>', unsafe_allow_html=True)
     config = {
-        "Algorithm":        "XGBoost Regressor",
-        "Objective":        "reg:squarederror",
-        "N Estimators":     "300",
-        "Learning Rate":    "0.05",
-        "Max Depth":        "6",
+        "Best Model":       "Ridge Regression",
+        "Models Compared":  "XGBoost, Random Forest, Ridge",
+        "Selection Metric": "Highest R² on test set",
         "Train/Test Split": "80% / 20%",
         "Feature Scaler":   "StandardScaler",
-        "Features Used":    "15 (inc. AQI change rate + rolling averages)",
+        "Features Used":    "15 (pollutants + weather + temporal + derived)",
+        "Regularization":   "L2 (alpha=1.0)",
         "Random State":     "42",
     }
     cfg_df = pd.DataFrame(config.items(), columns=["Parameter", "Value"])
@@ -741,7 +763,7 @@ elif page == "🤖  Model Performance":
 # ══════════════════════════════════════════════════════════════════
 # PAGE 4 — PREDICT AQI
 # ══════════════════════════════════════════════════════════════════
-elif page == "🔮  Predict AQI":
+elif page == "Predict AQI":
 
     st.markdown("""
     <div class="hero">
@@ -905,7 +927,7 @@ elif page == "🔮  Predict AQI":
 # ══════════════════════════════════════════════════════════════════
 # PAGE 5 — 3-DAY FORECAST
 # ══════════════════════════════════════════════════════════════════
-elif page == "📅  3-Day Forecast":
+elif page == "3-Day Forecast":
 
     st.markdown("""
     <div class="hero">
