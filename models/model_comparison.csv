@@ -1,0 +1,4 @@
+Model,MAE_train,MAE_test,RMSE_train,RMSE_test,R2_train,R2_test
+XGBoost,0.8614,7.0529,1.2213,9.8509,0.9972,0.8039
+RandomForest,4.0145,6.9394,5.453,9.48,0.9451,0.8184
+Ridge,6.1019,6.977,8.5275,9.605,0.8658,0.8136

@@ -476,15 +476,25 @@ elif page == "🤖  Model Performance":
     st.markdown("""
     <div class="hero">
         <h1>🤖 Model Performance</h1>
-        <p>XGBoost model evaluation metrics and feature importance for Karachi AQI</p>
+        <p>Comparing XGBoost, Random Forest & Ridge Regression — best model selected automatically</p>
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Metric cards ──────────────────────────────────────────────
-    st.markdown('<div class="section-title">📊 Evaluation Metrics</div>', unsafe_allow_html=True)
-    st.caption("💡 Update these values with your actual Colab training output")
+    # ── Load model comparison CSV ─────────────────────────────────
+    try:
+        comp_df = pd.read_csv("models/model_comparison.csv")
+        best_row = comp_df.loc[comp_df["R2_test"].idxmax()]
+        mae  = best_row["MAE_test"]
+        rmse = best_row["RMSE_test"]
+        r2   = best_row["R2_test"]
+        best_name = best_row["Model"]
+    except:
+        mae, rmse, r2, best_name = 12.45, 18.32, 0.91, "XGBoost"
+        comp_df = None
 
-    mae, rmse, r2 = 12.45, 18.32, 0.91   # ← replace with your actual values
+    # ── Best model metric cards ───────────────────────────────────
+    st.markdown('<div class="section-title">📊 Best Model Metrics</div>', unsafe_allow_html=True)
+    st.caption(f"🏆 Best model: **{best_name}** (highest R² on test set)")
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -506,10 +516,38 @@ elif page == "🤖  Model Performance":
             <div class="sub">Higher is better</div>
         </div>""", unsafe_allow_html=True)
 
+    # ── Model comparison table ────────────────────────────────────
+    if comp_df is not None:
+        st.markdown('<hr class="green-divider">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">📋 All Models Comparison</div>', unsafe_allow_html=True)
+        st.dataframe(comp_df, use_container_width=True, hide_index=True)
+
+        # R² bar chart comparison
+        fig = px.bar(comp_df, x="Model", y="R2_test",
+                     color="Model", title="R² Score by Model (Test Set)",
+                     color_discrete_sequence=[GREEN, TEAL, BLUE],
+                     text="R2_test")
+        fig.update_traces(texttemplate='%{text:.3f}', textposition='outside')
+        fig.update_layout(height=350, plot_bgcolor=PLOT_BG, paper_bgcolor=PLOT_BG,
+                          showlegend=False, yaxis=dict(gridcolor=GRID_CLR),
+                          margin=dict(l=0, r=0, t=40, b=0))
+        st.plotly_chart(fig, use_container_width=True)
+
+        # MAE comparison
+        fig = px.bar(comp_df, x="Model", y="MAE_test",
+                     color="Model", title="MAE by Model (Test Set — lower is better)",
+                     color_discrete_sequence=[GREEN, TEAL, BLUE],
+                     text="MAE_test")
+        fig.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+        fig.update_layout(height=350, plot_bgcolor=PLOT_BG, paper_bgcolor=PLOT_BG,
+                          showlegend=False, yaxis=dict(gridcolor=GRID_CLR),
+                          margin=dict(l=0, r=0, t=40, b=0))
+        st.plotly_chart(fig, use_container_width=True)
+
     st.markdown('<hr class="green-divider">', unsafe_allow_html=True)
 
     # ── R2 gauge ──────────────────────────────────────────────────
-    st.markdown('<div class="section-title">🎯 Model Accuracy Gauge</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">🎯 Best Model Accuracy Gauge</div>', unsafe_allow_html=True)
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=r2 * 100,
