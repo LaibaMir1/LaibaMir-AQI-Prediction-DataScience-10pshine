@@ -168,18 +168,74 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 
-# ── Load resources ────────────────────────────────────────────────
+# ── Hopsworks connection (cached) ────────────────────────────────
+@st.cache_resource
+def get_hopsworks_project():
+    """Connect to Hopsworks — returns None if unavailable"""
+    try:
+        import hopsworks
+        project = hopsworks.login(
+            host=st.secrets["HOPSWORKS_HOST"],
+            api_key_value=st.secrets["HOPSWORKS_API_KEY"]
+        )
+        return project
+    except Exception as e:
+        st.warning(f"⚠️ Hopsworks unavailable — using local files. ({e})")
+        return None
+
+# ── Load model ────────────────────────────────────────────────────
 @st.cache_resource
 def load_model():
+    """
+    Try to load model from Hopsworks Model Registry.
+    Falls back to local pkl if Hopsworks is unavailable.
+    """
+    project = get_hopsworks_project()
+
+    if project:
+        try:
+            mr         = project.get_model_registry()
+            model_meta = mr.get_model("xgboost_karachi_aqi", version=1)
+            model_dir  = model_meta.download()
+            model  = joblib.load(os.path.join(model_dir, "xgboost_karachi.pkl"))
+            scaler = joblib.load(os.path.join(model_dir, "scaler_karachi.pkl"))
+            st.sidebar.success("✅ Model loaded from Hopsworks")
+            return model, scaler
+        except Exception as e:
+            st.sidebar.warning(f"⚠️ Registry load failed — using local. ({e})")
+
+    # Fallback to local
     model  = joblib.load("models/xgboost_karachi.pkl")
     scaler = joblib.load("models/scaler_karachi.pkl")
+    st.sidebar.info("📁 Model loaded from local files")
     return model, scaler
 
-@st.cache_data
+# ── Load dataset ──────────────────────────────────────────────────
+@st.cache_data(ttl=3600)
 def load_dataset():
+    """
+    Try to load features from Hopsworks Feature Store.
+    Falls back to local CSV if Hopsworks is unavailable.
+    """
+    project = get_hopsworks_project()
+
+    if project:
+        try:
+            fs            = project.get_feature_store()
+            feature_group = fs.get_feature_group(name="aqi_features", version=1)
+            df            = feature_group.select_all().read()
+            df["date"]    = pd.to_datetime(df["date"])
+            df            = df.sort_values("date").reset_index(drop=True)
+            st.sidebar.success("✅ Data loaded from Hopsworks Feature Store")
+            return df
+        except Exception as e:
+            st.sidebar.warning(f"⚠️ Feature Store load failed — using local CSV. ({e})")
+
+    # Fallback to local CSV
     df = pd.read_csv("karachi_daily_aqi_weather.csv")
-    df['date'] = pd.to_datetime(df['date'])
-    df.columns = [c.lower().replace('.', '_') for c in df.columns]
+    df["date"] = pd.to_datetime(df["date"])
+    df.columns = [c.lower().replace(".", "_") for c in df.columns]
+    st.sidebar.info("📁 Data loaded from local CSV")
     return df
 
 model, scaler = load_model()
