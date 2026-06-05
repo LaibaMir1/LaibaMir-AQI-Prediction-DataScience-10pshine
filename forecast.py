@@ -1,6 +1,6 @@
 """
 forecast.py
-Fetches next 3 days of weather + air quality forecast
+Fetches next 3 days of weather and air quality forecast
 from Open-Meteo and generates AQI predictions using
 the trained model.
 """

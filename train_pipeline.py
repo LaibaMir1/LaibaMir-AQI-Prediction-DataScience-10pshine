@@ -1,10 +1,3 @@
-"""
-train_pipeline.py
-Standalone training script for GitHub Actions.
-Reads dataset → trains 3 models → saves best model.
-No Colab or interactive input needed.
-"""
-
 import pandas as pd
 import numpy as np
 import os

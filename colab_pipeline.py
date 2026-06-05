@@ -1,10 +1,4 @@
 # =========================================================
-# AQI PREDICTION PROJECT — COMPLETE PIPELINE
-# Karachi AQI Prediction using Multiple Models + Hopsworks
-# Run this in Google Colab
-# =========================================================
-
-# =========================================================
 # STEP 1 — INSTALL LIBRARIES (RUN ONLY IN GOOGLE COLAB)
 # =========================================================
 

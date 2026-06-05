@@ -1,5 +1,5 @@
 """
-Fetch Karachi AQI + Weather data from Open-Meteo API
+Fetch Karachi AQI Weather data from Open-Meteo API
 Covers: 2024-01-01 to 2026-05-31
 Saves to: karachi_daily_aqi_weather.csv
 """

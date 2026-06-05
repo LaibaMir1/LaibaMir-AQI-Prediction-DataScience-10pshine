@@ -1,6 +1,3 @@
-"""
-AQI Predictor — Karachi Air Quality Dashboard
-"""
 import os
 
 # ── Fix Hopsworks /tmp path on Windows ───────────────────────────
