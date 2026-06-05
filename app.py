@@ -733,11 +733,21 @@ elif page == "Model Performance":
                 'month','day_of_week','is_weekend',
                 'aqi_change_rate','aqi_rolling_3d','aqi_rolling_7d']
     try:
-        fi = model.feature_importances_
-        fi_df = pd.DataFrame({'Feature': features, 'Importance': fi})
-        fi_df = fi_df.sort_values('Importance', ascending=True)
-        fig = px.bar(fi_df, x='Importance', y='Feature', orientation='h',
-                     color='Importance',
+        # Ridge uses coef_, tree models use feature_importances_
+        if hasattr(model, 'feature_importances_'):
+            fi = model.feature_importances_
+            label = "Feature Importance"
+        elif hasattr(model, 'coef_'):
+            fi = np.abs(model.coef_)   # absolute coefficients = importance
+            label = "Feature Coefficient (|weight|)"
+        else:
+            raise ValueError("Model has no feature importance attribute")
+
+        fi_df = pd.DataFrame({'Feature': features, label: fi})
+        fi_df = fi_df.sort_values(label, ascending=True)
+
+        fig = px.bar(fi_df, x=label, y='Feature', orientation='h',
+                     color=label,
                      color_continuous_scale=["#d1fae5", GREEN, TEAL, BLUE])
         fig.update_layout(height=400, plot_bgcolor=PLOT_BG, paper_bgcolor=PLOT_BG,
                           xaxis=dict(gridcolor=GRID_CLR),
