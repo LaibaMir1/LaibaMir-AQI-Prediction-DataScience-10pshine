@@ -30,7 +30,7 @@ Build an end-to-end, serverless Air Quality Index (AQI) prediction system for **
 - Trains and compares multiple ML models to select the best performer
 - Forecasts AQI for the next 3 days using live weather forecast data
 - Displays results on an interactive Streamlit dashboard accessible publicly
-- Runs fully automated via GitHub Actions CI/CD — no manual intervention required
+- Runs fully automated via GitHub Actions CI/CD - no manual intervention required
 
 ### Why This Project Matters
 Karachi is one of the most densely populated cities in the world with chronic air quality issues. Accurate AQI forecasting helps:
@@ -147,9 +147,6 @@ We evaluated several weather and AQI APIs:
 
 ### Data Source
 **Open-Meteo API** (free, no API key required)
-- Archive API: `https://archive-api.open-meteo.com/v1/archive`
-- Air Quality API: `https://air-quality-api.open-meteo.com/v1/air-quality`
-- Forecast API: `https://api.open-meteo.com/v1/forecast`
 
 ### Data Range
 - **Historical:** January 2024 — May 2026
@@ -160,7 +157,6 @@ We evaluated several weather and AQI APIs:
 We considered several options for storing features:
 
 - **MongoDB** (used by reference project): Good for raw data but lacks feature versioning, statistics tracking, and ML-specific capabilities
-- **PostgreSQL**: Requires server management, not serverless
 - **CSV files**: No versioning, no statistics, not scalable
 - **Hopsworks**: Purpose-built for ML features, tracks statistics, enables feature reuse across models, has a free tier
 
@@ -228,7 +224,7 @@ Hopsworks gives us **feature lineage** (knowing exactly which features trained w
 ## 5. Feature Engineering
 
 ### Why Feature Engineering Matters
-Raw pollutant readings alone give us a snapshot of current conditions. But AQI tomorrow is not just about today's PM2.5 — it's about **where AQI has been trending** over the past week. Feature engineering captures this temporal momentum.
+Raw pollutant readings alone give us a snapshot of current conditions. But AQI tomorrow is not just about today's PM2.5 - it's about **where AQI has been trending** over the past week. Feature engineering captures this temporal momentum.
 
 ### Final Feature Set (15 features)
 
@@ -312,11 +308,11 @@ We selected one model from each major ML paradigm:
 
 **1. The Overfitting Problem with Tree Models**
 
-XGBoost achieved a near-perfect R²=0.9995 on training data but only 0.9140 on test data — a gap of 0.0855. This is severe overfitting. The model memorized training patterns instead of learning generalizable relationships. With only 874 rows, XGBoost had too many degrees of freedom.
+XGBoost achieved a near-perfect R²=0.9995 on training data but only 0.9140 on test data, a gap of 0.0855. This is severe overfitting. The model memorized training patterns instead of learning generalizable relationships. With only 874 rows, XGBoost had too many degrees of freedom.
 
-Random Forest showed the same pattern: R²=0.9756 train vs 0.8859 test — gap of 0.0897.
+Random Forest showed the same pattern: R²=0.9756 train vs 0.8859 test with gap of 0.0897.
 
-Ridge Regression showed: R²=0.9659 train vs 0.9545 test — gap of only **0.0114**. This tiny gap indicates genuine learning, not memorization.
+Ridge Regression showed: R²=0.9659 train vs 0.9545 test with gap of only **0.0114**. This tiny gap indicates genuine learning, not memorization.
 
 **2. The Linearity of Rolling Features**
 
@@ -337,13 +333,9 @@ With 874 observations and 15 features, the model complexity should be proportion
 - Not used because: requires 5,000+ samples for reliable training; our 874-row dataset would cause severe overfitting; our mentor confirmed deep learning is not required
 - Ridge's rolling average features approximate LSTM's memory at a fraction of the cost
 
-**SARIMA (Seasonal ARIMA):**
-- Explicitly models seasonality — ideal for monthly AQI patterns
-- Not used because: SARIMA is univariate — it cannot incorporate PM2.5, CO, NO2 as predictors; our goal is pollutant-informed prediction, not just time extrapolation
-
 **Support Vector Regression (SVR):**
 - Works well on small datasets; robust to outliers
-- Not used because: SVR training scales as O(n²) to O(n³) — problematic as hourly CI/CD adds daily rows; requires careful kernel selection; Ridge achieved better R² with zero tuning
+- Not used because: SVR training scales as O(n²) to O(n³) - problematic as hourly CI/CD adds daily rows; requires careful kernel selection; Ridge achieved better R² with zero tuning
 
 **Gradient Boosting (sklearn):**
 - Similar to XGBoost conceptually
@@ -511,46 +503,7 @@ Then added `venv/` to `.gitignore` to prevent future accidental commits.
 
 ---
 
-### Challenge 6: Ridge Model Has No feature_importances_
-**Problem:** The Model Performance page tried to call `model.feature_importances_` to plot feature importance. This attribute exists on tree-based models (XGBoost, RandomForest) but not on linear models like Ridge, causing `AttributeError: 'Ridge' object has no attribute 'feature_importances_'`.
-
-**Solution:** Added model-type detection using `hasattr()`:
-```python
-if hasattr(model, 'feature_importances_'):
-    fi = model.feature_importances_      # tree models
-elif hasattr(model, 'coef_'):
-    fi = np.abs(model.coef_)             # linear models
-```
-For Ridge, absolute coefficient values serve as feature importance — a larger absolute coefficient means the feature has stronger influence on predictions.
-
----
-
-### Challenge 7: Network Timeouts During pip Installation
-**Problem:** The team's internet connection repeatedly timed out when downloading large packages (scipy at 36.5MB, xgboost at 101.7MB, pyarrow at 27.4MB). pip raised `ReadTimeoutError: HTTPSConnectionPool: Read timed out` and hash mismatch errors from partially downloaded corrupted files.
-
-**Solution:** Used the Tsinghua University PyPI mirror (significantly faster from Pakistan) with extended timeout and retry flags:
-```bash
-pip install <package> --index-url https://pypi.tuna.tsinghua.edu.cn/simple --no-cache-dir --timeout 600 --retries 20
-```
-Also set it as the permanent default mirror to avoid repeating this for every install.
-
----
-
-### Challenge 8: twofish Package Requires C++ Compiler
-**Problem:** `twofish` (a dependency of `pyjks`, itself a dependency of hopsworks) is a C extension that must be compiled from source. Windows requires Microsoft C++ Build Tools (Visual Studio) for this, which is a ~3-4GB download.
-
-**Solution:** For local development, installed C++ Build Tools once as a one-time setup. For Streamlit Cloud (Linux), this was not an issue as Linux has `gcc` available by default and `twofish` compiled without issues.
-
----
-
-### Challenge 9: Git Branch Management Complexity
-**Problem:** The project accumulated multiple feature branches (`develop`, `dataset-and-models-files`, `feature/dataset-and-models`, `feature/multiple-models` etc.) without a proper `main` branch. Merging became complex with conflicts appearing in `.gitignore` when pulling from remote.
-
-**Solution:** Created a fresh `main` branch, merged all feature branches in sequence, resolved conflicts manually, and established a consistent branching strategy going forward: always branch from `main`, complete the feature, merge back to `main`, delete the feature branch.
-
----
-
-### Challenge 10: Streamlit Cloud SQLite Write Permission
+### Challenge 6: Streamlit Cloud SQLite Write Permission
 **Problem:** On Streamlit Cloud, the app directory (`/mount/src/...`) is read-only. Attempting to create `aqi_predictions.db` in the same directory as `app.py` caused `sqlite3.OperationalError` when users clicked the Predict button.
 
 **Solution:** Changed the database path to use the user's home directory, which is always writable on both local and cloud environments:
@@ -617,6 +570,6 @@ On local Windows this resolves to `C:\Users\Laiba Mir\`, on Streamlit Cloud to `
 
 ---
 
-*Report prepared for 10Pearls Data Science Internship Project*
-*Karachi AQI Predictor — End-to-End MLOps System*
+*Report prepared for 10Pearls Shine Internship Data Science Project*
+*Karachi AQI Predictor*
 *Author: Laiba Mir | June 2026*
