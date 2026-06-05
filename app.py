@@ -948,11 +948,11 @@ elif page == "Model Performance":
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("**📊 Mean Feature Importance**")
-            st.image(shap_bar, use_column_width=True)
+            st.image(shap_bar, width=700)
             st.caption("Higher SHAP value = stronger influence on AQI prediction")
         with c2:
             st.markdown("**🐝 Feature Impact Distribution**")
-            st.image(shap_bee, use_column_width=True)
+            st.image(shap_bee, width=700)
             st.caption("Red = high feature value, Blue = low feature value")
     else:
         st.info("⏳ SHAP plots not found. Run Step 22 in Colab and download shap_summary_bar.png and shap_beeswarm.png into the models/ folder.")
