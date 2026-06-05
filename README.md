@@ -5,7 +5,7 @@ An end-to-end Air Quality Index (AQI) prediction system for **Karachi, Pakistan*
 ---
 
 ## 🌐 Live Dashboard
-👉 **[View Live App on Streamlit Cloud](https://laibamir-aqi-prediction-datascience-10pshine.streamlit.app/)**
+👉 **[View Live App on Streamlit Cloud](https://laibamir-aqi-prediction-datascience-10pshine-ecdguvxp6xmnqe2uv.streamlit.app/)**
 
 ---
 
