@@ -625,6 +625,182 @@ elif page == "Data Analysis":
                       margin=dict(l=0, r=0, t=10, b=0))
     st.plotly_chart(fig, use_container_width=True)
 
+    st.markdown('<hr class="green-divider">', unsafe_allow_html=True)
+
+    # ── 1. AQI Trend with threshold lines ─────────────────────────
+    st.markdown('<div class="section-title">📈 AQI Trend with Health Thresholds</div>', unsafe_allow_html=True)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df['date'], y=df['aqi'],
+        mode='lines', name='Daily AQI',
+        line=dict(color=GREEN, width=1.5),
+        fill='tozeroy', fillcolor='rgba(16,185,129,0.08)'
+    ))
+    for y, lbl, clr in [
+        (50,  "Good",       "#22c55e"),
+        (100, "Moderate",   "#eab308"),
+        (150, "Unhealthy",  "#f97316"),
+        (200, "Very Unhealthy", "#ef4444"),
+    ]:
+        fig.add_hline(y=y, line_dash="dash", line_color=clr,
+                      line_width=1.5, annotation_text=lbl,
+                      annotation_font_color=clr)
+    fig.update_layout(height=380, plot_bgcolor=PLOT_BG, paper_bgcolor=PLOT_BG,
+                      xaxis=dict(gridcolor=GRID_CLR, title="Date"),
+                      yaxis=dict(gridcolor=GRID_CLR, title="AQI"),
+                      hovermode='x unified',
+                      margin=dict(l=0, r=0, t=10, b=0))
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown('<hr class="green-divider">', unsafe_allow_html=True)
+
+    # ── 2. AQI Rolling Average Trend ──────────────────────────────
+    st.markdown('<div class="section-title">📉 AQI Rolling Average Trend</div>', unsafe_allow_html=True)
+    df_sorted = df.sort_values('date').copy()
+    df_sorted['rolling_7d']  = df_sorted['aqi'].rolling(7).mean()
+    df_sorted['rolling_30d'] = df_sorted['aqi'].rolling(30).mean()
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df_sorted['date'], y=df_sorted['aqi'],
+        mode='lines', name='Daily AQI',
+        line=dict(color='#d1fae5', width=1),
+        opacity=0.6
+    ))
+    fig.add_trace(go.Scatter(
+        x=df_sorted['date'], y=df_sorted['rolling_7d'],
+        mode='lines', name='7-Day Avg',
+        line=dict(color=GREEN, width=2.5)
+    ))
+    fig.add_trace(go.Scatter(
+        x=df_sorted['date'], y=df_sorted['rolling_30d'],
+        mode='lines', name='30-Day Avg',
+        line=dict(color=BLUE, width=2.5)
+    ))
+    fig.update_layout(height=380, plot_bgcolor=PLOT_BG, paper_bgcolor=PLOT_BG,
+                      xaxis=dict(gridcolor=GRID_CLR, title="Date"),
+                      yaxis=dict(gridcolor=GRID_CLR, title="AQI"),
+                      hovermode='x unified',
+                      legend=dict(bgcolor='rgba(0,0,0,0)'),
+                      margin=dict(l=0, r=0, t=10, b=0))
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown('<hr class="green-divider">', unsafe_allow_html=True)
+
+    # ── 3. Seasonal Pattern Analysis ──────────────────────────────
+    st.markdown('<div class="section-title">🌦️ Seasonal AQI Patterns</div>', unsafe_allow_html=True)
+
+    def get_season(month):
+        if month in [12, 1, 2]:  return "Winter"
+        elif month in [3, 4, 5]: return "Spring"
+        elif month in [6, 7, 8]: return "Monsoon"
+        else:                     return "Autumn"
+
+    df_sorted['season'] = df_sorted['date'].dt.month.apply(get_season)
+
+    c1, c2 = st.columns(2)
+    with c1:
+        season_avg = df_sorted.groupby('season')['aqi'].mean().reset_index()
+        season_order = ["Winter", "Spring", "Monsoon", "Autumn"]
+        season_avg['season'] = pd.Categorical(season_avg['season'],
+                                               categories=season_order, ordered=True)
+        season_avg = season_avg.sort_values('season')
+        fig = px.bar(season_avg, x='season', y='aqi',
+                     title="Average AQI by Season",
+                     color='aqi',
+                     color_continuous_scale=["#10b981","#eab308","#ef4444"])
+        fig.update_layout(height=320, plot_bgcolor=PLOT_BG,
+                          paper_bgcolor=PLOT_BG,
+                          xaxis=dict(gridcolor=GRID_CLR),
+                          yaxis=dict(gridcolor=GRID_CLR),
+                          margin=dict(t=40, b=0))
+        st.plotly_chart(fig, use_container_width=True)
+
+    with c2:
+        fig = px.box(df_sorted, x='season', y='aqi',
+                     title="AQI Distribution by Season",
+                     color='season',
+                     color_discrete_map={
+                         "Winter":"#0891b2", "Spring":"#10b981",
+                         "Monsoon":"#06b6d4", "Autumn":"#f97316"
+                     },
+                     category_orders={"season": season_order})
+        fig.update_layout(height=320, plot_bgcolor=PLOT_BG,
+                          paper_bgcolor=PLOT_BG, showlegend=False,
+                          xaxis=dict(gridcolor=GRID_CLR),
+                          yaxis=dict(gridcolor=GRID_CLR),
+                          margin=dict(t=40, b=0))
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown('<hr class="green-divider">', unsafe_allow_html=True)
+
+    # ── 4. Weekend vs Weekday AQI ─────────────────────────────────
+    st.markdown('<div class="section-title">📆 Weekend vs Weekday AQI</div>', unsafe_allow_html=True)
+    c1, c2 = st.columns(2)
+
+    df_sorted['day_type'] = df_sorted['date'].dt.dayofweek.apply(
+        lambda x: 'Weekend' if x >= 5 else 'Weekday'
+    )
+
+    with c1:
+        day_avg = df_sorted.groupby('day_type')['aqi'].mean().reset_index()
+        fig = px.bar(day_avg, x='day_type', y='aqi',
+                     title="Average AQI: Weekday vs Weekend",
+                     color='day_type',
+                     color_discrete_map={"Weekday": BLUE, "Weekend": GREEN})
+        fig.update_layout(height=300, plot_bgcolor=PLOT_BG,
+                          paper_bgcolor=PLOT_BG, showlegend=False,
+                          xaxis=dict(gridcolor=GRID_CLR),
+                          yaxis=dict(gridcolor=GRID_CLR),
+                          margin=dict(t=40, b=0))
+        st.plotly_chart(fig, use_container_width=True)
+
+    with c2:
+        fig = px.box(df_sorted, x='day_type', y='aqi',
+                     title="AQI Distribution: Weekday vs Weekend",
+                     color='day_type',
+                     color_discrete_map={"Weekday": BLUE, "Weekend": GREEN})
+        fig.update_layout(height=300, plot_bgcolor=PLOT_BG,
+                          paper_bgcolor=PLOT_BG, showlegend=False,
+                          xaxis=dict(gridcolor=GRID_CLR),
+                          yaxis=dict(gridcolor=GRID_CLR),
+                          margin=dict(t=40, b=0))
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown('<hr class="green-divider">', unsafe_allow_html=True)
+
+    # ── 5. Pollutant Trends Over Time ─────────────────────────────
+    st.markdown('<div class="section-title">🏭 Pollutant Trends Over Time</div>', unsafe_allow_html=True)
+
+    pollutants = {
+        'pm2_5': ('PM2.5', GREEN),
+        'pm10':  ('PM10',  BLUE),
+        'co':    ('CO',    TEAL),
+        'no2':   ('NO2',   '#f97316'),
+    }
+
+    fig = go.Figure()
+    for col, (name, clr) in pollutants.items():
+        if col in df_sorted.columns:
+            df_sorted[f'{col}_roll'] = df_sorted[col].rolling(7).mean()
+            fig.add_trace(go.Scatter(
+                x=df_sorted['date'],
+                y=df_sorted[f'{col}_roll'],
+                mode='lines', name=name,
+                line=dict(width=2)
+            ))
+
+    fig.update_layout(
+        height=400, plot_bgcolor=PLOT_BG, paper_bgcolor=PLOT_BG,
+        xaxis=dict(gridcolor=GRID_CLR, title="Date"),
+        yaxis=dict(gridcolor=GRID_CLR, title="Concentration (μg/m³)"),
+        hovermode='x unified',
+        legend=dict(bgcolor='rgba(0,0,0,0)'),
+        margin=dict(l=0, r=0, t=10, b=0),
+        title="7-Day Rolling Average of Key Pollutants"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
 
 # ══════════════════════════════════════════════════════════════════
 # PAGE 3 — MODEL PERFORMANCE
