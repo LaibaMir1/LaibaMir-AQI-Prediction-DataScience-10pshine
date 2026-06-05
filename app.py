@@ -280,8 +280,10 @@ def assign_cat(v):
     c, _, _ = get_category(v)
     return c
 
+DB_PATH = os.path.join(os.path.expanduser("~"), "aqi_predictions.db")
+
 def save_prediction(inputs, aqi, category):
-    conn = sqlite3.connect("aqi_predictions.db")
+    conn = sqlite3.connect(DB_PATH)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS predictions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -302,7 +304,7 @@ def save_prediction(inputs, aqi, category):
 
 def load_history():
     try:
-        conn = sqlite3.connect("aqi_predictions.db")
+        conn = sqlite3.connect(DB_PATH)
         df = pd.read_sql("SELECT * FROM predictions ORDER BY id DESC LIMIT 100", conn)
         conn.close()
         return df
