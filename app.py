@@ -1,6 +1,14 @@
 """
 AQI Predictor — Karachi Air Quality Dashboard
 """
+import os
+
+# ── Fix Hopsworks /tmp path on Windows ───────────────────────────
+os.makedirs("C:/tmp", exist_ok=True)
+os.environ["TMPDIR"] = "C:/tmp"
+os.environ["TEMP"]   = "C:/tmp"
+os.environ["TMP"]    = "C:/tmp"
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -8,7 +16,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import joblib
 import sqlite3
-import os
 from forecast import generate_forecast
 from datetime import datetime
 
@@ -190,15 +197,31 @@ html, body, [class*="css"] {
 # ── Hopsworks connection (cached) ────────────────────────────────
 @st.cache_resource
 def get_hopsworks_project():
-    """Connect to Hopsworks — returns None if unavailable"""
+    """Connect to Hopsworks with Windows /tmp path fix"""
     try:
+        import tempfile
         import hopsworks
+
+        # ── Fix Windows path issue ─────────────────────────────
+        # Hopsworks defaults to /tmp which doesn't exist on Windows
+        # Point all temp vars to the OS temp directory
+        tmp_dir = tempfile.gettempdir()
+        os.environ["TMPDIR"] = tmp_dir
+        os.environ["TEMP"]   = tmp_dir
+        os.environ["TMP"]    = tmp_dir
+
+        # Create a /tmp folder on Windows if it doesn't exist
+        win_tmp = os.path.join(os.path.splitdrive(tmp_dir)[0] + "\\", "tmp")
+        os.makedirs(win_tmp, exist_ok=True)
+        os.environ["TMPDIR"] = win_tmp
+
         project = hopsworks.login(
             host=st.secrets["HOPSWORKS_HOST"],
             api_key_value=st.secrets["HOPSWORKS_API_KEY"]
         )
         return project
-    except Exception:
+    except Exception as e:
+        st.warning(f"⚠️ Hopsworks unavailable — using local files. ({e})")
         return None
 
 # ── Load model ────────────────────────────────────────────────────
@@ -212,11 +235,13 @@ def load_model():
             model_dir  = model_meta.download()
             model  = joblib.load(os.path.join(model_dir, "xgboost_karachi.pkl"))
             scaler = joblib.load(os.path.join(model_dir, "scaler_karachi.pkl"))
+            st.sidebar.success("✅ Model loaded from Hopsworks")
             return model, scaler
-        except Exception:
-            pass
+        except Exception as e:
+            st.sidebar.warning(f"⚠️ Registry load failed — using local. ({e})")
     model  = joblib.load("models/xgboost_karachi.pkl")
     scaler = joblib.load("models/scaler_karachi.pkl")
+    st.sidebar.info("📁 Model loaded from local files")
     return model, scaler
 
 # ── Load dataset ──────────────────────────────────────────────────
@@ -230,12 +255,14 @@ def load_dataset():
             df            = feature_group.select_all().read()
             df["date"]    = pd.to_datetime(df["date"])
             df            = df.sort_values("date").reset_index(drop=True)
+            st.sidebar.success("✅ Data loaded from Hopsworks Feature Store")
             return df
-        except Exception:
-            pass
+        except Exception as e:
+            st.sidebar.warning(f"⚠️ Feature Store load failed — using local CSV. ({e})")
     df = pd.read_csv("karachi_daily_aqi_weather.csv")
     df["date"] = pd.to_datetime(df["date"])
     df.columns = [c.lower().replace(".", "_") for c in df.columns]
+    st.sidebar.info("📁 Data loaded from local CSV")
     return df
 
 model, scaler = load_model()
